@@ -79,8 +79,7 @@ def _create_depth_map_raw(img):
         align_corners=False,
     )
 
-    depth_pt = model(img)[0]  # noqa
-    return depth_pt
+    return model(img)[0]
 
 
 def create_normal_map(img):
@@ -141,9 +140,7 @@ def create_pose_map(img_t):
     from imaginairy.utils import get_device
 
     img_t = img_t.to(get_device())
-    pose_t = create_body_pose_img(img_t) / 255
-    # pose_t = pose_t[:, [2, 1, 0], :, :]
-    return pose_t
+    return create_body_pose_img(img_t) / 255
 
 
 CONTROL_MODES = {

@@ -75,15 +75,19 @@ def disabled_train(self):
 
 
 def ismap(x):
-    if not isinstance(x, torch.Tensor):
-        return False
-    return (len(x.shape) == 4) and (x.shape[1] > 3)
+    return (
+        (len(x.shape) == 4) and (x.shape[1] > 3)
+        if isinstance(x, torch.Tensor)
+        else False
+    )
 
 
 def isimage(x):
-    if not isinstance(x, torch.Tensor):
-        return False
-    return (len(x.shape) == 4) and (x.shape[1] == 3 or x.shape[1] == 1)
+    return (
+        len(x.shape) == 4 and x.shape[1] in [3, 1]
+        if isinstance(x, torch.Tensor)
+        else False
+    )
 
 
 def uniform_on_device(r1, r2, shape, device):
@@ -371,7 +375,7 @@ class DDPM(pl.LightningModule):
                     # we only modify first two axes
                     assert new_shape[2:] == old_shape[2:]
                 # assumes first axis corresponds to output dim
-                if not new_shape == old_shape:
+                if new_shape != old_shape:
                     new_param = param.clone()
                     old_param = sd[name]
                     if len(new_shape) == 1:
@@ -399,9 +403,9 @@ class DDPM(pl.LightningModule):
                     sd[name] = new_param
 
         missing, unexpected = (
-            self.load_state_dict(sd, strict=False)
-            if not only_model
-            else self.model.load_state_dict(sd, strict=False)
+            self.model.load_state_dict(sd, strict=False)
+            if only_model
+            else self.load_state_dict(sd, strict=False)
         )
         # print(
         #     f"Restored from {path} with {len(missing)} missing and {len(unexpected)} unexpected keys"
@@ -494,11 +498,7 @@ class DDPM(pl.LightningModule):
         b = shape[0]
         img = torch.randn(shape, device=device)
         intermediates = [img]
-        for i in tqdm(
-            reversed(range(0, self.num_timesteps)),
-            desc="Sampling t",
-            total=self.num_timesteps,
-        ):
+        for i in tqdm(reversed(range(self.num_timesteps)), desc="Sampling t", total=self.num_timesteps):
             img = self.p_sample(
                 img,
                 torch.full((b,), i, device=device, dtype=torch.long),
@@ -506,9 +506,7 @@ class DDPM(pl.LightningModule):
             )
             if i % self.log_every_t == 0 or i == self.num_timesteps - 1:
                 intermediates.append(img)
-        if return_intermediates:
-            return img, intermediates
-        return img
+        return (img, intermediates) if return_intermediates else img
 
     @torch.no_grad()
     def sample(self, batch_size=16, return_intermediates=False):
@@ -555,7 +553,6 @@ class DDPM(pl.LightningModule):
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         model_out = self.model(x_noisy, t)
 
-        loss_dict = {}
         if self.parameterization == "eps":
             target = noise
         elif self.parameterization == "x0":
@@ -571,15 +568,15 @@ class DDPM(pl.LightningModule):
 
         log_prefix = "train" if self.training else "val"
 
-        loss_dict.update({f"{log_prefix}/loss_simple": loss.mean()})
+        loss_dict = {f"{log_prefix}/loss_simple": loss.mean()}
         loss_simple = loss.mean() * self.l_simple_weight
 
         loss_vlb = (self.lvlb_weights[t] * loss).mean()
-        loss_dict.update({f"{log_prefix}/loss_vlb": loss_vlb})
+        loss_dict[f"{log_prefix}/loss_vlb"] = loss_vlb
 
         loss = loss_simple + self.original_elbo_weight * loss_vlb
 
-        loss_dict.update({f"{log_prefix}/loss": loss})
+        loss_dict[f"{log_prefix}/loss"] = loss
 
         return loss, loss_dict
 
@@ -642,7 +639,7 @@ class DDPM(pl.LightningModule):
         _, loss_dict_no_ema = self.shared_step(batch)
         with self.ema_scope():
             _, loss_dict_ema = self.shared_step(batch)
-            loss_dict_ema = {key + "_ema": loss_dict_ema[key] for key in loss_dict_ema}
+            loss_dict_ema = {f"{key}_ema": loss_dict_ema[key] for key in loss_dict_ema}
         self.log_dict(
             loss_dict_no_ema, prog_bar=False, logger=True, on_step=False, on_epoch=True
         )
@@ -665,13 +662,11 @@ class DDPM(pl.LightningModule):
     def log_images(
         self, batch, N=8, n_row=2, *, sample=True, return_keys=None, **kwargs
     ):
-        log = {}
         x = self.get_input(batch, self.first_stage_key)
         N = min(x.shape[0], N)
         n_row = min(x.shape[0], n_row)
         x = x.to(self.device)[:N]
-        log["inputs"] = x
-
+        log = {"inputs": x}
         # get diffusion row
         diffusion_row = []
         x_start = x[:n_row]
@@ -706,9 +701,8 @@ class DDPM(pl.LightningModule):
         lr = self.learning_rate
         params = list(self.model.parameters())
         if self.learn_logvar:
-            params = params + [self.logvar]
-        opt = torch.optim.AdamW(params, lr=lr)
-        return opt
+            params += [self.logvar]
+        return torch.optim.AdamW(params, lr=lr)
 
 
 def _TileModeConv2DConvForward(
@@ -857,32 +851,33 @@ class LatentDiffusion(DDPM):
             param.requires_grad = False
 
     def instantiate_cond_stage(self, config):
-        if not self.cond_stage_trainable:
-            if config == "__is_first_stage__":
-                logger.debug("Using first stage also as cond stage.")
-                self.cond_stage_model = self.first_stage_model
-            elif config == "__is_unconditional__":
-                logger.debug(
-                    f"Training {self.__class__.__name__} as an unconditional model."
-                )
-                self.cond_stage_model = None
-                # self.be_unconditional = True
-            else:
-                model = instantiate_from_config(config)
-                self.cond_stage_model = model.eval()
-                self.cond_stage_model.train = disabled_train
-                for param in self.cond_stage_model.parameters():
-                    param.requires_grad = False
-        else:
+        if self.cond_stage_trainable:
             assert config != "__is_first_stage__"
             assert config != "__is_unconditional__"
             model = instantiate_from_config(config)
             self.cond_stage_model = model
 
+        elif config == "__is_first_stage__":
+            logger.debug("Using first stage also as cond stage.")
+            self.cond_stage_model = self.first_stage_model
+        elif config == "__is_unconditional__":
+            logger.debug(
+                f"Training {self.__class__.__name__} as an unconditional model."
+            )
+            self.cond_stage_model = None
+            # self.be_unconditional = True
+        else:
+            model = instantiate_from_config(config)
+            self.cond_stage_model = model.eval()
+            self.cond_stage_model.train = disabled_train
+            for param in self.cond_stage_model.parameters():
+                param.requires_grad = False
+
     def _get_denoise_row_from_list(self, samples, desc=""):
-        denoise_row = []
-        for zd in tqdm(samples, desc=desc):
-            denoise_row.append(self.decode_first_stage(zd.to(self.device)))
+        denoise_row = [
+            self.decode_first_stage(zd.to(self.device))
+            for zd in tqdm(samples, desc=desc)
+        ]
         n_imgs_per_row = len(denoise_row)
         denoise_row = torch.stack(denoise_row)  # n_log_step, n_row, C, H, W
         denoise_grid = rearrange(denoise_row, "n b c h w -> b n c h w")
@@ -920,8 +915,7 @@ class LatentDiffusion(DDPM):
         y = torch.arange(0, h).view(h, 1, 1).repeat(1, w, 1)
         x = torch.arange(0, w).view(1, w, 1).repeat(h, 1, 1)
 
-        arr = torch.cat([y, x], dim=-1)
-        return arr
+        return torch.cat([y, x], dim=-1)
 
     def delta_border(self, h, w):
         """
@@ -934,10 +928,9 @@ class LatentDiffusion(DDPM):
         arr = self.meshgrid(h, w) / lower_right_corner
         dist_left_up = torch.min(arr, dim=-1, keepdims=True)[0]
         dist_right_down = torch.min(1 - arr, dim=-1, keepdims=True)[0]
-        edge_dist = torch.min(
+        return torch.min(
             torch.cat([dist_left_up, dist_right_down], dim=-1), dim=-1
         )[0]
-        return edge_dist
 
     def get_weighting(self, h, w, Ly, Lx, device):
         weighting = self.delta_border(h, w)
@@ -1076,15 +1069,14 @@ class LatentDiffusion(DDPM):
         if self.model.conditioning_key is not None:
             if cond_key is None:
                 cond_key = self.cond_stage_key
-            if cond_key != self.first_stage_key:
-                if cond_key in ["caption", "coordinates_bbox", "txt"]:
-                    xc = batch[cond_key]
-                elif cond_key == "class_label":
-                    xc = batch
-                else:
-                    xc = super().get_input(batch, cond_key).to(self.device)
-            else:
+            if cond_key == self.first_stage_key:
                 xc = x
+            elif cond_key in ["caption", "coordinates_bbox", "txt"]:
+                xc = batch[cond_key]
+            elif cond_key == "class_label":
+                xc = batch
+            else:
+                xc = super().get_input(batch, cond_key).to(self.device)
             if not self.cond_stage_trainable or force_c_encode:
                 if isinstance(xc, (dict, list)):
                     # import pudb; pudb.set_trace()
@@ -1133,8 +1125,7 @@ class LatentDiffusion(DDPM):
 
     def shared_step(self, batch, **kwargs):
         x, c = self.get_input(batch, self.first_stage_key)
-        loss = self(x, c)
-        return loss
+        return self(x, c)
 
     def forward(self, x, c, *args, **kwargs):
         t = torch.randint(
@@ -1150,10 +1141,7 @@ class LatentDiffusion(DDPM):
         return self.p_losses(x, c, t, *args, **kwargs)
 
     def apply_model(self, x_noisy, t, cond, return_ids=False):
-        if isinstance(cond, dict):
-            # hybrid case, cond is expected to be a dict
-            pass
-        else:
+        if not isinstance(cond, dict):
             if not isinstance(cond, list):
                 cond = [cond]
             key = (
@@ -1161,143 +1149,15 @@ class LatentDiffusion(DDPM):
             )
             cond = {key: cond}
 
-        if False and hasattr(self, "split_input_params"):  # noqa
-            assert len(cond) == 1  # todo can only deal with one conditioning atm
-            assert not return_ids
-            ks = self.split_input_params["ks"]  # eg. (128, 128)
-            stride = self.split_input_params["stride"]  # eg. (64, 64)
+        x_recon = self.model(x_noisy, t, **cond)
 
-            h, w = x_noisy.shape[-2:]  # noqa
-
-            fold, unfold, normalization, weighting = self.get_fold_unfold(
-                x_noisy, ks, stride
-            )
-
-            z = unfold(x_noisy)  # (bn, nc * prod(**ks), L)
-            # Reshape to img shape
-            z = z.view(
-                (z.shape[0], -1, ks[0], ks[1], z.shape[-1])
-            )  # (bn, nc, ks[0], ks[1], L )
-            z_list = [z[:, :, :, :, i] for i in range(z.shape[-1])]
-
-            if (
-                self.cond_stage_key in ["image", "LR_image", "segmentation", "bbox_img"]
-                and self.model.conditioning_key
-            ):  # todo check for completeness
-                c_key = next(iter(cond.keys()))  # get key
-                c = next(iter(cond.values()))  # get value
-                assert len(c) == 1  # todo extend to list with more than one elem
-                c = c[0]  # get element
-
-                c = unfold(c)
-                c = c.view(
-                    (c.shape[0], -1, ks[0], ks[1], c.shape[-1])
-                )  # (bn, nc, ks[0], ks[1], L )
-
-                cond_list = [{c_key: [c[:, :, :, :, i]]} for i in range(c.shape[-1])]
-
-            elif self.cond_stage_key == "coordinates_bbox":
-                assert (
-                    "original_image_size" in self.split_input_params
-                ), "BoudingBoxRescaling is missing original_image_size"
-
-                # assuming padding of unfold is always 0 and its dilation is always 1
-                n_patches_per_row = int((w - ks[0]) / stride[0] + 1)
-                full_img_h, full_img_w = self.split_input_params["original_image_size"]
-                # as we are operating on latents, we need the factor from the original image size to the
-                # spatial latent size to properly rescale the crops for regenerating the bbox annotations
-                num_downs = self.first_stage_model.encoder.num_resolutions - 1
-                rescale_latent = 2 ** (num_downs)
-
-                # get top left positions of patches as conforming for the bbbox tokenizer, therefore we
-                # need to rescale the tl patch coordinates to be in between (0,1)
-                tl_patch_coordinates = [
-                    (
-                        rescale_latent
-                        * stride[0]
-                        * (patch_nr % n_patches_per_row)
-                        / full_img_w,
-                        rescale_latent
-                        * stride[1]
-                        * (patch_nr // n_patches_per_row)
-                        / full_img_h,
-                    )
-                    for patch_nr in range(z.shape[-1])
-                ]
-
-                # patch_limits are tl_coord, width and height coordinates as (x_tl, y_tl, h, w)
-                patch_limits = [
-                    (
-                        x_tl,
-                        y_tl,
-                        rescale_latent * ks[0] / full_img_w,
-                        rescale_latent * ks[1] / full_img_h,
-                    )
-                    for x_tl, y_tl in tl_patch_coordinates
-                ]
-                # patch_values = [(np.arange(x_tl,min(x_tl+ks, 1.)),np.arange(y_tl,min(y_tl+ks, 1.))) for x_tl, y_tl in tl_patch_coordinates]
-
-                # tokenize crop coordinates for the bounding boxes of the respective patches
-                patch_limits_tknzd = [
-                    torch.LongTensor(self.bbox_tokenizer._crop_encoder(bbox))[  # noqa
-                        None
-                    ].to(  # noqa
-                        self.device
-                    )
-                    for bbox in patch_limits
-                ]  # list of length l with tensors of shape (1, 2)
-
-                # cut tknzd crop position from conditioning
-                assert isinstance(cond, dict), "cond must be dict to be fed into model"
-                cut_cond = cond["c_crossattn"][0][..., :-2].to(self.device)
-
-                adapted_cond = torch.stack(
-                    [torch.cat([cut_cond, p], dim=1) for p in patch_limits_tknzd]
-                )
-                adapted_cond = rearrange(adapted_cond, "l b n -> (l b) n")
-
-                adapted_cond = self.get_learned_conditioning(adapted_cond)
-
-                adapted_cond = rearrange(
-                    adapted_cond, "(l b) n d -> l b n d", l=z.shape[-1]
-                )
-
-                cond_list = [{"c_crossattn": [e]} for e in adapted_cond]
-
-            else:
-                cond_list = [
-                    cond for i in range(z.shape[-1])
-                ]  # Todo make this more efficient
-
-            # apply model by loop over crops
-            output_list = [
-                self.model(z_list[i], t, **cond_list[i]) for i in range(z.shape[-1])
-            ]
-            assert not isinstance(
-                output_list[0], tuple
-            )  # todo can't deal with multiple model outputs check this never happens
-
-            o = torch.stack(output_list, axis=-1)
-            o = o * weighting
-            # Reverse reshape to img shape
-            o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
-            # stitch crops together
-            x_recon = fold(o) / normalization
-
-        else:
-            x_recon = self.model(x_noisy, t, **cond)
-
-        if isinstance(x_recon, tuple) and not return_ids:
-            return x_recon[0]
-
-        return x_recon
+        return x_recon[0] if isinstance(x_recon, tuple) and not return_ids else x_recon
 
     def p_losses(self, x_start, cond, t, noise=None):  # noqa
         noise = noise if noise is not None else torch.randn_like(x_start)
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise)
         model_output = self.apply_model(x_noisy, t, cond)
 
-        loss_dict = {}
         prefix = "train" if self.training else "val"
 
         if self.parameterization == "x0":
@@ -1308,23 +1168,22 @@ class LatentDiffusion(DDPM):
             raise NotImplementedError()
 
         loss_simple = self.get_loss(model_output, target, mean=False).mean([1, 2, 3])
-        loss_dict.update({f"{prefix}/loss_simple": loss_simple.mean()})
-
+        loss_dict = {f"{prefix}/loss_simple": loss_simple.mean()}
         # t sometimes on wrong device. not sure why
         logvar_t = self.logvar[t.to(self.logvar.device)].to(self.device)
         loss = loss_simple / torch.exp(logvar_t) + logvar_t
         # loss = loss_simple / torch.exp(self.logvar) + self.logvar
         if self.learn_logvar:
-            loss_dict.update({f"{prefix}/loss_gamma": loss.mean()})
-            loss_dict.update({"logvar": self.logvar.data.mean()})
+            loss_dict[f"{prefix}/loss_gamma"] = loss.mean()
+            loss_dict["logvar"] = self.logvar.data.mean()
 
         loss = self.l_simple_weight * loss.mean()
 
         loss_vlb = self.get_loss(model_output, target, mean=False).mean(dim=(1, 2, 3))
         loss_vlb = (self.lvlb_weights[t] * loss_vlb).mean()
-        loss_dict.update({f"{prefix}/loss_vlb": loss_vlb})
+        loss_dict[f"{prefix}/loss_vlb"] = loss_vlb
         loss += self.original_elbo_weight * loss_vlb
-        loss_dict.update({f"{prefix}/loss": loss})
+        loss_dict[f"{prefix}/loss"] = loss
 
         return loss, loss_dict
 
@@ -1459,19 +1318,15 @@ class LatentDiffusion(DDPM):
 
     @torch.no_grad()
     def get_unconditional_conditioning(self, batch_size, null_label=None):
-        if null_label is not None:
-            xc = null_label
-            if isinstance(xc, ListConfig):
-                xc = list(xc)
-            if isinstance(xc, (dict, list)):
-                c = self.get_learned_conditioning(xc)
-            else:
-                if hasattr(xc, "to"):
-                    xc = xc.to(self.device)
-                c = self.get_learned_conditioning(xc)
-        else:
+        if null_label is None:
             # todo: get null label from cond_stage_model
             raise NotImplementedError()
+        xc = null_label
+        if isinstance(xc, ListConfig):
+            xc = list(xc)
+        if not isinstance(xc, (dict, list)) and hasattr(xc, "to"):
+            xc = xc.to(self.device)
+        c = self.get_learned_conditioning(xc)
         c = repeat(c, "1 ... -> b ...", b=batch_size).to(self.device)
         return c
 

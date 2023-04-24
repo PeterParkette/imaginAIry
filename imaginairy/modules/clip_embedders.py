@@ -42,8 +42,7 @@ class FrozenCLIPEmbedder(nn.Module):
         tokens = batch_encoding["input_ids"].to(self.device)
         outputs = self.transformer(input_ids=tokens)
 
-        z = outputs.last_hidden_state
-        return z
+        return outputs.last_hidden_state
 
     def encode(self, text):
         return self(text)
@@ -125,9 +124,7 @@ class FrozenClipImageEmbedder(nn.Module):
             antialias=self.antialias,
         )
         x = (x + 1.0) / 2.0
-        # renormalize according to clip
-        x = kornia.enhance.normalize(x, self.mean, self.std)
-        return x
+        return kornia.enhance.normalize(x, self.mean, self.std)
 
     def forward(self, x):
         # x is assumed to be in range [-1,1]

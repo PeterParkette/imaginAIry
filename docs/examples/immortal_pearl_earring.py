@@ -18,13 +18,13 @@ def generate_image_morph_video():
     prompts = []
     seed = 290124740
 
+    scene = "scenic majestic mountains in the background"
     for year in frange(1900, 2100, 1 / 6):
         pearl_weight = max(2000 - year, 1)
         robotic_weight = min(max(year - 2025, 0), 25) * 2
         print(
             f"year: {year}, pearl_weight: {pearl_weight}, robotic_weight: {robotic_weight}"
         )
-        scene = "scenic majestic mountains in the background"
         color_txt = "color" if year >= 1960 else "black and white"
         year_txt = str(int(year)) if year <= 2025 else "futuristic"
         transcendence_weight = (max(year - 2050, 0) / 3) * robotic_weight

@@ -9,8 +9,7 @@ def calculate_blurriness_level(img):
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     sharpness = cv2.Laplacian(gray, cv2.CV_64F).var()
     sharpness = max(sharpness, 0.000001)
-    bluriness = 1 / sharpness
-    return bluriness
+    return 1 / sharpness
 
 
 def is_blurry(img, threshold=0.91):

@@ -13,13 +13,13 @@ def parse_schedule_str(schedule_str):
     if not match:
         raise ValueError(f"Invalid kwarg schedule: {schedule_str}")
 
-    arg_name = match.group(1).replace("-", "_")
+    arg_name = match[1].replace("-", "_")
     if not hasattr(ImaginePrompt(), arg_name):
         raise ValueError(
             f"Invalid kwarg schedule. Not a valid argument name: {arg_name}"
         )
 
-    arg_values = match.group(2)
+    arg_values = match[2]
     if ":" in arg_values:
         start, end, step = arg_values.split(":")
         arg_values = list(frange(float(start), float(end), float(step)))

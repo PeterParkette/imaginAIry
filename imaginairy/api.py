@@ -159,14 +159,14 @@ def imagine(
     if get_device() == "cpu":
         logger.info("Running in CPU mode. it's gonna be slooooooow.")
 
-    with torch.no_grad(), platform_appropriate_autocast(
-        precision
-    ), fix_torch_nn_layer_norm(), fix_torch_group_norm():
+    with (torch.no_grad(), platform_appropriate_autocast(
+            precision
+        ), fix_torch_nn_layer_norm(), fix_torch_group_norm()):
         for i, prompt in enumerate(prompts):
             logger.info(
                 f"Generating 🖼  {i + 1}/{num_prompts}: {prompt.prompt_description()}"
             )
-            for attempt in range(0, unsafe_retry_count + 1):
+            for attempt in range(unsafe_retry_count + 1):
                 if attempt > 0:
                     prompt.seed += 100_000_000 + attempt
                 result = _generate_single_image(
@@ -258,16 +258,16 @@ def _generate_single_image(
         progress_latents.append(latents)
 
     with ImageLoggingContext(
-        prompt=prompt,
-        model=model,
-        debug_img_callback=debug_img_callback,
-        progress_img_callback=progress_img_callback,
-        progress_img_interval_steps=progress_img_interval_steps,
-        progress_img_interval_min_s=progress_img_interval_min_s,
-        progress_latent_callback=latent_logger
-        if prompt.collect_progress_latents
-        else None,
-    ) as lc:
+            prompt=prompt,
+            model=model,
+            debug_img_callback=debug_img_callback,
+            progress_img_callback=progress_img_callback,
+            progress_img_interval_steps=progress_img_interval_steps,
+            progress_img_interval_min_s=progress_img_interval_min_s,
+            progress_latent_callback=latent_logger
+            if prompt.collect_progress_latents
+            else None,
+        ) as lc:
         seed_everything(prompt.seed)
 
         model.tile_mode(prompt.tile_mode)
@@ -478,7 +478,7 @@ def _generate_single_image(
         if (
             prompt.allow_compose_phase
             and not is_controlnet_model
-            and not model.cond_stage_key == "edit"
+            and model.cond_stage_key != "edit"
         ):
             if prompt.init_image:
                 comp_image = _generate_composition_image(
@@ -595,11 +595,10 @@ def _generate_single_image(
 
 def _prompts_to_embeddings(prompts, model):
     total_weight = sum(wp.weight for wp in prompts)
-    conditioning = sum(
+    return sum(
         model.get_learned_conditioning(wp.text) * (wp.weight / total_weight)
         for wp in prompts
     )
-    return conditioning
 
 
 def calc_scale_to_fit_within(
@@ -610,10 +609,7 @@ def calc_scale_to_fit_within(
     if max(height, width) < max_size:
         return 1
 
-    if width > height:
-        return max_size / width
-
-    return max_size / height
+    return max_size / width if width > height else max_size / height
 
 
 def _scale_latent(

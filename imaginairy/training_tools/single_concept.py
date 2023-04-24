@@ -94,8 +94,7 @@ class SingleConceptDataset(Dataset):
         except RuntimeError as e:
             raise RuntimeError(f"Could not read image {img_path}") from e
         image = self.image_transforms(image)
-        data = {"image": image, "txt": txt}
-        return data
+        return {"image": image, "txt": txt}
 
     @property
     def concept_image_filename_groups(self):
@@ -127,9 +126,11 @@ def _load_image_filenames_and_alts(img_dir, image_extensions=(".jpg", ".jpeg", "
 
 
 def _load_image_filenames(img_dir, image_extensions=(".jpg", ".jpeg", ".png")):
-    image_filenames = []
-    for filename in os.listdir(img_dir):
-        if filename.lower().endswith(image_extensions) and not filename.startswith("."):
-            image_filenames.append(filename)
+    image_filenames = [
+        filename
+        for filename in os.listdir(img_dir)
+        if filename.lower().endswith(image_extensions)
+        and not filename.startswith(".")
+    ]
     random.shuffle(image_filenames)
     return image_filenames

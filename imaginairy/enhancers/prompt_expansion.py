@@ -18,11 +18,11 @@ PROMPT_EXPANSION_PATTERN = re.compile(r"[|a-z0-9_ -]+")
 @lru_cache()
 def prompt_library_filepaths(prompt_library_paths=None):
     """Return all available category/filepath pairs."""
-    prompt_library_paths = [] if not prompt_library_paths else prompt_library_paths
+    prompt_library_paths = prompt_library_paths if prompt_library_paths else []
     combined_prompt_library_filepaths = {}
     for prompt_path in DEFAULT_PROMPT_LIBRARY_PATHS + list(prompt_library_paths):
         library_prompts = prompt_library_filepath(prompt_path)
-        combined_prompt_library_filepaths.update(library_prompts)
+        combined_prompt_library_filepaths |= library_prompts
 
     return combined_prompt_library_filepaths
 
@@ -30,9 +30,7 @@ def prompt_library_filepaths(prompt_library_paths=None):
 @lru_cache()
 def category_list(prompt_library_paths=None):
     """Return the names of available phrase-lists."""
-    categories = list(prompt_library_filepaths(prompt_library_paths).keys())
-    categories.sort()
-    return categories
+    return sorted(prompt_library_filepaths(prompt_library_paths).keys())
 
 
 @lru_cache()
@@ -58,10 +56,7 @@ def get_phrases(category_name, prompt_library_paths=None):
         raise LookupError(
             f"'{category_name}' is not a valid prompt expansion category. Could not find the txt file."
         ) from e
-    _open = open
-    if filepath.endswith(".gz"):
-        _open = gzip.open
-
+    _open = gzip.open if filepath.endswith(".gz") else open
     with _open(filepath, "rb") as f:
         lines = f.readlines()
         phrases = [line.decode("utf-8").strip() for line in lines]

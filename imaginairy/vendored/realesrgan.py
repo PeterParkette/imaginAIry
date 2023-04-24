@@ -75,10 +75,7 @@ class RealESRGANer:
             loadnet = torch.load(model_path, map_location=torch.device("cpu"))
 
         # prefer to use params_ema
-        if "params_ema" in loadnet:
-            keyname = "params_ema"
-        else:
-            keyname = "params"
+        keyname = "params_ema" if "params_ema" in loadnet else "params"
         model.load_state_dict(loadnet[keyname], strict=True)
 
         model.eval()
@@ -223,7 +220,7 @@ class RealESRGANer:
 
     @torch.no_grad()
     def enhance(self, img, outscale=None, alpha_upsampler="realesrgan"):
-        h_input, w_input = img.shape[0:2]
+        h_input, w_input = img.shape[:2]
         # img: numpy
         img = img.astype(np.float32)
         if np.max(img) > 256:  # 16-bit image
@@ -258,8 +255,7 @@ class RealESRGANer:
         if img_mode == "L":
             output_img = cv2.cvtColor(output_img, cv2.COLOR_BGR2GRAY)
 
-        # ------------------- process the alpha channel if necessary ------------------- #
-        if img_mode == "RGBA":
+        elif img_mode == "RGBA":
             if alpha_upsampler == "realesrgan":
                 self.pre_process(alpha)
                 if self.tile_size > 0:
@@ -273,7 +269,7 @@ class RealESRGANer:
                 output_alpha = np.transpose(output_alpha[[2, 1, 0], :, :], (1, 2, 0))
                 output_alpha = cv2.cvtColor(output_alpha, cv2.COLOR_BGR2GRAY)
             else:  # use the cv2 resize for alpha channel
-                h, w = alpha.shape[0:2]
+                h, w = alpha.shape[:2]
                 output_alpha = cv2.resize(
                     alpha,
                     (w * self.scale, h * self.scale),

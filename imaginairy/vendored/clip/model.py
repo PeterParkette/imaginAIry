@@ -157,9 +157,7 @@ class ModifiedResNet(nn.Module):
         layers = [Bottleneck(self._inplanes, planes, stride)]
 
         self._inplanes = planes * Bottleneck.expansion
-        for _ in range(1, blocks):
-            layers.append(Bottleneck(self._inplanes, planes))
-
+        layers.extend(Bottleneck(self._inplanes, planes) for _ in range(1, blocks))
         return nn.Sequential(*layers)
 
     def forward(self, x):
@@ -483,8 +481,9 @@ def build_model(state_dict: dict):
         vision_layers = len(
             [
                 k
-                for k in state_dict.keys()
-                if k.startswith("visual.") and k.endswith(".attn.in_proj_weight")
+                for k in state_dict
+                if k.startswith("visual.")
+                and k.endswith(".attn.in_proj_weight")
             ]
         )
         vision_patch_size = state_dict["visual.conv1.weight"].shape[-1]

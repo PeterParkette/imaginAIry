@@ -11,21 +11,19 @@ from imaginairy.roi_utils import (
 def test_square_roi_coordinate():
     img_sizes = (10, 100, 200, 511, 513, 1024)
     # iterate through all permutations of image sizes using itertools.product
-    for img_width, img_height in itertools.product(img_sizes, img_sizes):
-        # randomly generate a region of interest
-        for _ in range(100):
-            x1 = random.randint(0, img_width)
-            y1 = random.randint(0, img_height)
-            x2 = random.randint(x1, img_width)
-            y2 = random.randint(y1, img_height)
-            roi = x1, y1, x2, y2
-            try:
-                x1, y1, x2, y2 = square_roi_coordinate(roi, img_width, img_height)
-            except RoiNotInBoundsError:
-                continue
-            assert (
-                x2 - x1 == y2 - y1
-            ), f"ROI is not square: img_width: {img_width}, img_height: {img_height}, roi: {roi}"
+    for img_width, img_height, _ in itertools.product(img_sizes, img_sizes, range(100)):
+        x1 = random.randint(0, img_width)
+        y1 = random.randint(0, img_height)
+        x2 = random.randint(x1, img_width)
+        y2 = random.randint(y1, img_height)
+        roi = x1, y1, x2, y2
+        try:
+            x1, y1, x2, y2 = square_roi_coordinate(roi, img_width, img_height)
+        except RoiNotInBoundsError:
+            continue
+        assert (
+            x2 - x1 == y2 - y1
+        ), f"ROI is not square: img_width: {img_width}, img_height: {img_height}, roi: {roi}"
 
 
 # resize_roi_coordinates

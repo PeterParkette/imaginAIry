@@ -149,14 +149,13 @@ class BLIP_VQA(nn.Module):
                 return answers
 
             elif inference == "rank":
-                max_ids = self.rank_answer(
+                return self.rank_answer(
                     question_output.last_hidden_state,
                     question.attention_mask,
                     answer.input_ids,
                     answer.attention_mask,
                     k_test,
                 )
-                return max_ids
 
     def rank_answer(self, question_states, question_atts, answer_ids, answer_atts, k):
         num_ques = question_states.size(0)
@@ -182,7 +181,7 @@ class BLIP_VQA(nn.Module):
         # answer input: [num_question*k, answer_len]
         input_ids = []
         input_atts = []
-        for b, topk_id in enumerate(topk_ids):
+        for topk_id in topk_ids:
             input_ids.append(answer_ids.index_select(dim=0, index=topk_id))
             input_atts.append(answer_atts.index_select(dim=0, index=topk_id))
         input_ids = torch.cat(input_ids, dim=0)
@@ -210,9 +209,7 @@ class BLIP_VQA(nn.Module):
         log_probs_sum = log_probs_sum.view(num_ques, k)
 
         max_topk_ids = log_probs_sum.argmax(dim=1)
-        max_ids = topk_ids[max_topk_ids >= 0, max_topk_ids]
-
-        return max_ids
+        return topk_ids[max_topk_ids >= 0, max_topk_ids]
 
 
 def blip_vqa(pretrained="", **kwargs):

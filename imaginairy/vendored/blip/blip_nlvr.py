@@ -67,11 +67,7 @@ class BLIP_NLVR(nn.Module):
         hidden_state = output.last_hidden_state[:, 0, :]
         prediction = self.cls_head(hidden_state)
 
-        if train:
-            loss = F.cross_entropy(prediction, targets)
-            return loss
-        else:
-            return prediction
+        return F.cross_entropy(prediction, targets) if train else prediction
 
 
 def blip_nlvr(pretrained="", **kwargs):
@@ -112,5 +108,5 @@ def load_checkpoint(model, url_or_filename):
             state_dict[new_key1] = state_dict[key]
 
     msg = model.load_state_dict(state_dict, strict=False)
-    print("load checkpoint from %s" % url_or_filename)
+    print(f"load checkpoint from {url_or_filename}")
     return model, msg

@@ -22,10 +22,7 @@ class AddReadout(nn.Module):
         self.start_index = start_index
 
     def forward(self, x):
-        if self.start_index == 2:
-            readout = (x[:, 0] + x[:, 1]) / 2
-        else:
-            readout = x[:, 0]
+        readout = (x[:, 0] + x[:, 1]) / 2 if self.start_index == 2 else x[:, 0]
         return x[:, self.start_index :] + readout.unsqueeze(1)
 
 
@@ -64,10 +61,10 @@ def forward_vit(pretrained, x):
     layer_3 = pretrained.activations["3"]
     layer_4 = pretrained.activations["4"]
 
-    layer_1 = pretrained.act_postprocess1[0:2](layer_1)
-    layer_2 = pretrained.act_postprocess2[0:2](layer_2)
-    layer_3 = pretrained.act_postprocess3[0:2](layer_3)
-    layer_4 = pretrained.act_postprocess4[0:2](layer_4)
+    layer_1 = pretrained.act_postprocess1[:2](layer_1)
+    layer_2 = pretrained.act_postprocess2[:2](layer_2)
+    layer_3 = pretrained.act_postprocess3[:2](layer_3)
+    layer_4 = pretrained.act_postprocess4[:2](layer_4)
 
     unflatten = nn.Sequential(
         nn.Unflatten(
@@ -90,10 +87,10 @@ def forward_vit(pretrained, x):
     if layer_4.ndim == 3:
         layer_4 = unflatten(layer_4)
 
-    layer_1 = pretrained.act_postprocess1[3 : len(pretrained.act_postprocess1)](layer_1)
-    layer_2 = pretrained.act_postprocess2[3 : len(pretrained.act_postprocess2)](layer_2)
-    layer_3 = pretrained.act_postprocess3[3 : len(pretrained.act_postprocess3)](layer_3)
-    layer_4 = pretrained.act_postprocess4[3 : len(pretrained.act_postprocess4)](layer_4)
+    layer_1 = pretrained.act_postprocess1[3:](layer_1)
+    layer_2 = pretrained.act_postprocess2[3:](layer_2)
+    layer_3 = pretrained.act_postprocess3[3:](layer_3)
+    layer_4 = pretrained.act_postprocess4[3:](layer_4)
 
     return layer_1, layer_2, layer_3, layer_4
 
@@ -170,9 +167,7 @@ def get_readout_oper(vit_features, features, use_readout, start_index=1):
     elif use_readout == "add":
         readout_oper = [AddReadout(start_index)] * len(features)
     elif use_readout == "project":
-        readout_oper = [
-            ProjectReadout(vit_features, start_index) for out_feat in features
-        ]
+        readout_oper = [ProjectReadout(vit_features, start_index) for _ in features]
     else:
         assert (
             False

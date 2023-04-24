@@ -119,9 +119,9 @@ class AutoencoderKL(pl.LightningModule):
         final_tensor = torch.zeros(
             [1, 4, math.ceil(h / 8), math.ceil(w / 8)], device=x.device
         )
+        overlap_pct = 0.5
         for x_img in x.split(1):
             encoded_chunks = []
-            overlap_pct = 0.5
             chunks = tile_image(
                 x_img, tile_size=chunk_size, overlap_percent=overlap_pct
             )
@@ -206,8 +206,7 @@ class AutoencoderKL(pl.LightningModule):
 
     def decode_all_at_once(self, z):
         z = self.post_quant_conv(z)
-        dec = self.decoder(z)
-        return dec
+        return self.decoder(z)
 
     def decode_sliced(self, z, chunk_size=128):
         """
@@ -218,9 +217,9 @@ class AutoencoderKL(pl.LightningModule):
         """
         b, c, h, w = z.size()
         final_tensor = torch.zeros([1, 3, h * 8, w * 8], device=z.device)
+        overlap_pct = 0.5
         for z_latent in z.split(1):
             decoded_chunks = []
-            overlap_pct = 0.5
             chunks = tile_image(
                 z_latent, tile_size=chunk_size, overlap_percent=overlap_pct
             )
@@ -290,10 +289,7 @@ class AutoencoderKL(pl.LightningModule):
 
     def forward(self, input, sample_posterior=True):  # noqa
         posterior = self.encode(input)
-        if sample_posterior:
-            z = posterior.sample()
-        else:
-            z = posterior.mode()
+        z = posterior.sample() if sample_posterior else posterior.mode()
         dec = self.decode(z)
         return dec, posterior
 
@@ -301,8 +297,7 @@ class AutoencoderKL(pl.LightningModule):
         x = batch[k]
         if len(x.shape) == 3:
             x = x[..., None]
-        x = x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format).float()
-        return x
+        return x.permute(0, 3, 1, 2).to(memory_format=torch.contiguous_format).float()
 
     def training_step(self, batch, batch_idx, optimizer_idx):
         inputs = self.get_input(batch, self.image_key)
@@ -376,7 +371,7 @@ class AutoencoderKL(pl.LightningModule):
             0,
             self.global_step,
             last_layer=self.get_last_layer(),
-            split="val" + postfix,
+            split=f"val{postfix}",
         )
 
         discloss, log_dict_disc = self.loss(
@@ -386,7 +381,7 @@ class AutoencoderKL(pl.LightningModule):
             1,
             self.global_step,
             last_layer=self.get_last_layer(),
-            split="val" + postfix,
+            split=f"val{postfix}",
         )
 
         self.log(f"val{postfix}/rec_loss", log_dict_ae[f"val{postfix}/rec_loss"])
@@ -453,10 +448,9 @@ class AutoencoderKL(pl.LightningModule):
         arr = self.meshgrid(h, w) / lower_right_corner
         dist_left_up = torch.min(arr, dim=-1, keepdims=True)[0]
         dist_right_down = torch.min(1 - arr, dim=-1, keepdims=True)[0]
-        edge_dist = torch.min(
+        return torch.min(
             torch.cat([dist_left_up, dist_right_down], dim=-1), dim=-1
         )[0]
-        return edge_dist
 
     def get_weighting(self, h, w, Ly, Lx, device):
         weighting = self.delta_border(h, w)
@@ -576,8 +570,7 @@ class AutoencoderKL(pl.LightningModule):
         y = torch.arange(0, h).view(h, 1, 1).repeat(1, w, 1)
         x = torch.arange(0, w).view(1, w, 1).repeat(h, 1, 1)
 
-        arr = torch.cat([y, x], dim=-1)
-        return arr
+        return torch.cat([y, x], dim=-1)
 
     # def to_rgb(self, x):
     #     assert self.image_key == "segmentation"
@@ -600,9 +593,7 @@ class IdentityFirstStage(torch.nn.Module):
         return x
 
     def quantize(self, x, *args, **kwargs):
-        if self.vq_interface:
-            return x, None, [None, None, None]
-        return x
+        return (x, None, [None, None, None]) if self.vq_interface else x
 
     def forward(self, x, *args, **kwargs):
         return x
@@ -640,14 +631,13 @@ def merge_tensors(tensor_list, num_rows, num_cols):
     print(f"num_cols: {num_cols}")
     n, channel, h, w = tensor_list[0].size()
     assert n == 1
-    final_width = 0
-    final_height = 0
-    for col_idx in range(num_cols):
-        final_width += tensor_list[col_idx].size()[3]
-
-    for row_idx in range(num_rows):
-        final_height += tensor_list[row_idx * num_cols].size()[2]
-
+    final_width = sum(
+        tensor_list[col_idx].size()[3] for col_idx in range(num_cols)
+    )
+    final_height = sum(
+        tensor_list[row_idx * num_cols].size()[2]
+        for row_idx in range(num_rows)
+    )
     final_tensor = torch.zeros([1, channel, final_height, final_width])
     print(f"final size {final_tensor.size()}")
     for row_idx in range(num_rows):

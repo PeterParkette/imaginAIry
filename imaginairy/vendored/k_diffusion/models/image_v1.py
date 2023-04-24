@@ -158,10 +158,14 @@ class MappingNet(nn.Sequential):
     def __init__(self, feats_in, feats_out, n_layers=2):
         layers = []
         for i in range(n_layers):
-            layers.append(
-                orthogonal_(nn.Linear(feats_in if i == 0 else feats_out, feats_out))
+            layers.extend(
+                (
+                    orthogonal_(
+                        nn.Linear(feats_in if i == 0 else feats_out, feats_out)
+                    ),
+                    nn.GELU(),
+                )
             )
-            layers.append(nn.GELU())
         super().__init__(*layers)
 
 
@@ -275,9 +279,7 @@ class ImageDenoiserModelV1(nn.Module):
             input, logvar = input[:, :-1], input[:, -1].flatten(1).mean(1)
         if self.patch_size > 1:
             input = F.pixel_shuffle(input, self.patch_size)
-        if self.has_variance and return_variance:
-            return input, logvar
-        return input
+        return (input, logvar) if self.has_variance and return_variance else input
 
     def set_skip_stages(self, skip_stages):
         self.proj_in = nn.Conv2d(

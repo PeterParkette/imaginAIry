@@ -131,13 +131,13 @@ class ControlNet(nn.Module):
         self.model_channels = model_channels
         if isinstance(num_res_blocks, int):
             self.num_res_blocks = len(channel_mult) * [num_res_blocks]
-        else:
-            if len(num_res_blocks) != len(channel_mult):
-                raise ValueError(
-                    "provide num_res_blocks either as an int (globally constant) or "
-                    "as a list/tuple (per-level) with the same length as channel_mult"
-                )
+        elif len(num_res_blocks) == len(channel_mult):
             self.num_res_blocks = num_res_blocks
+        else:
+            raise ValueError(
+                "provide num_res_blocks either as an int (globally constant) or "
+                "as a list/tuple (per-level) with the same length as channel_mult"
+            )
         if disable_self_attentions is not None:
             # should be a list of booleans, indicating whether to disable self-attention in TransformerBlocks or not
             assert len(disable_self_attentions) == len(channel_mult)
@@ -239,15 +239,7 @@ class ControlNet(nn.Module):
 
                     if num_attention_blocks is None or nr < num_attention_blocks[level]:
                         layers.append(
-                            AttentionBlock(
-                                ch,
-                                use_checkpoint=use_checkpoint,
-                                num_heads=num_heads,
-                                num_head_channels=dim_head,
-                                use_new_attention_order=use_new_attention_order,
-                            )
-                            if not use_spatial_transformer
-                            else SpatialTransformer(
+                            SpatialTransformer(
                                 ch,
                                 num_heads,
                                 dim_head,
@@ -256,6 +248,14 @@ class ControlNet(nn.Module):
                                 disable_self_attn=disabled_sa,
                                 use_linear=use_linear_in_transformer,
                                 use_checkpoint=use_checkpoint,
+                            )
+                            if use_spatial_transformer
+                            else AttentionBlock(
+                                ch,
+                                use_checkpoint=use_checkpoint,
+                                num_heads=num_heads,
+                                num_head_channels=dim_head,
+                                use_new_attention_order=use_new_attention_order,
                             )
                         )
                 self.input_blocks.append(TimestepEmbedSequential(*layers))
@@ -305,15 +305,7 @@ class ControlNet(nn.Module):
                 use_checkpoint=use_checkpoint,
                 use_scale_shift_norm=use_scale_shift_norm,
             ),
-            AttentionBlock(
-                ch,
-                use_checkpoint=use_checkpoint,
-                num_heads=num_heads,
-                num_head_channels=dim_head,
-                use_new_attention_order=use_new_attention_order,
-            )
-            if not use_spatial_transformer
-            else SpatialTransformer(  # always uses a self-attn
+            SpatialTransformer(  # always uses a self-attn
                 ch,
                 num_heads,
                 dim_head,
@@ -322,6 +314,14 @@ class ControlNet(nn.Module):
                 disable_self_attn=disable_middle_self_attn,
                 use_linear=use_linear_in_transformer,
                 use_checkpoint=use_checkpoint,
+            )
+            if use_spatial_transformer
+            else AttentionBlock(
+                ch,
+                use_checkpoint=use_checkpoint,
+                num_heads=num_heads,
+                num_head_channels=dim_head,
+                use_new_attention_order=use_new_attention_order,
             ),
             ResBlock(
                 ch,
@@ -399,15 +399,13 @@ class ControlLDM(LatentDiffusion):
         control = self.control_model(
             x=x_noisy, hint=cond_hint, timesteps=t, context=cond_txt
         )
-        eps = diffusion_model(
+        return diffusion_model(
             x=x_noisy,
             timesteps=t,
             context=cond_txt,
             control=control,
             only_mid_control=self.only_mid_control,
         )
-
-        return eps
 
     @torch.no_grad()
     def get_unconditional_conditioning(self, N):
@@ -435,13 +433,14 @@ class ControlLDM(LatentDiffusion):
     ):
         use_ddim = ddim_steps is not None
 
-        log = {}
         z, c = self.get_input(batch, self.first_stage_key, bs=N)
         c_cat, c = c["c_concat"][0][:N], c["c_crossattn"][0][:N]
         N = min(z.shape[0], N)
         n_row = min(z.shape[0], n_row)
-        log["reconstruction"] = self.decode_first_stage(z)
-        log["control"] = c_cat * 2.0 - 1.0
+        log = {
+            "reconstruction": self.decode_first_stage(z),
+            "control": c_cat * 2.0 - 1.0,
+        }
         log["conditioning"] = log_txt_as_img(
             (512, 512), batch[self.cond_stage_key], size=16
         )
@@ -513,8 +512,7 @@ class ControlLDM(LatentDiffusion):
         if not self.sd_locked:
             params += list(self.model.diffusion_model.output_blocks.parameters())
             params += list(self.model.diffusion_model.out.parameters())
-        opt = torch.optim.AdamW(params, lr=lr)
-        return opt
+        return torch.optim.AdamW(params, lr=lr)
 
     def low_vram_shift(self, is_diffusing):
         if is_diffusing:

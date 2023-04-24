@@ -45,23 +45,21 @@ compare_prompts = [
 )
 def test_model_versions(filename_base_for_orig_outputs, model_version):
     """Test that we can switch between model versions."""
-    prompts = []
-    for prompt_text in compare_prompts:
-        prompts.append(
-            ImaginePrompt(
-                prompt_text,
-                seed=1,
-                model=model_version,
-            )
+    prompts = [
+        ImaginePrompt(
+            prompt_text,
+            seed=1,
+            model=model_version,
         )
-
+        for prompt_text in compare_prompts
+    ]
     threshold = 33000
 
-    for i, result in enumerate(imagine(prompts)):
+    for result in imagine(prompts):
         img_path = f"{filename_base_for_orig_outputs}_{result.prompt.prompt_text}_{result.prompt.model}.png"
         result.img.save(img_path)
 
-    for i, result in enumerate(imagine(prompts)):
+    for result in imagine(prompts):
         img_path = f"{filename_base_for_orig_outputs}_{result.prompt.prompt_text}_{result.prompt.model}.png"
         assert_image_similar_to_expectation(
             result.img, img_path=img_path, threshold=threshold
@@ -205,8 +203,6 @@ def test_img_to_img_fruit_2_gold(
 @pytest.mark.skipif(get_device() == "cpu", reason="Too slow to run on CPU")
 def test_img_to_img_fruit_2_gold_repeat():
     img = LazyLoadingImage(filepath=f"{TESTS_FOLDER}/data/bowl_of_fruit.jpg")
-    run_count = 1
-
     kwargs = {
         "prompt": "a white bowl filled with gold coins. sharp focus",
         "prompt_strength": 12,
@@ -225,11 +221,10 @@ def test_img_to_img_fruit_2_gold_repeat():
         ImaginePrompt(**kwargs),
         ImaginePrompt(**kwargs),
     ]
-    for result in imagine(prompts, debug_img_callback=None):
+    for run_count, result in enumerate(imagine(prompts, debug_img_callback=None), start=1):
         result.img.save(
             f"{TESTS_FOLDER}/test_output/img2img_fruit_2_gold_plms_{get_device()}_run-{run_count:02}.jpg"
         )
-        run_count += 1
 
 
 @pytest.mark.skipif(get_device() == "cpu", reason="Too slow to run on CPU")

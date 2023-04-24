@@ -38,13 +38,10 @@ def pad_right_down_corner(img, stride, padValue):
 
 
 def transfer(model, model_weights):
-    # transfer caffe model to pytorch which will match the layer name
-    transfered_model_weights = {}
-    for weights_name in model.state_dict().keys():
-        transfered_model_weights[weights_name] = model_weights[
-            ".".join(weights_name.split(".")[1:])
-        ]
-    return transfered_model_weights
+    return {
+        weights_name: model_weights[".".join(weights_name.split(".")[1:])]
+        for weights_name in model.state_dict().keys()
+    }
 
 
 # draw the body keypoint and lims
@@ -97,7 +94,7 @@ def draw_bodypose(canvas, candidate, subset):
             index = int(subset[n][i])
             if index == -1:
                 continue
-            x, y = candidate[index][0:2]
+            x, y = candidate[index][:2]
             cv2.circle(canvas, (int(x), int(y)), 4, colors[i], thickness=-1)
     for i in range(17):
         for n in range(len(subset)):  # noqa
@@ -183,7 +180,7 @@ def handDetect(candidate, subset, oriImg):
     # left hand: wrist 7, elbow 6, shoulder 5
     ratioWristElbow = 0.33
     detect_result = []
-    image_height, image_width = oriImg.shape[0:2]
+    image_height, image_width = oriImg.shape[:2]
     for person in subset.astype(int):
         # if any of three not detected
         has_left = np.sum(person[[5, 6, 7]] == -1) == 0
@@ -272,7 +269,7 @@ def make_layers(block, no_relu_layers):
             )
             layers.append((layer_name, conv2d))
             if layer_name not in no_relu_layers:
-                layers.append(("relu_" + layer_name, nn.ReLU(inplace=True)))
+                layers.append((f"relu_{layer_name}", nn.ReLU(inplace=True)))
 
     return nn.Sequential(OrderedDict(layers))
 
@@ -296,7 +293,6 @@ class bodypose_model(nn.Module):
             "Mconv7_stage6_L1",
             "Mconv7_stage6_L1",
         ]
-        blocks = {}
         block0 = OrderedDict(
             [
                 ("conv1_1", [3, 64, 3, 1, 1]),
@@ -337,9 +333,7 @@ class bodypose_model(nn.Module):
                 ("conv5_5_CPM_L2", [512, 19, 1, 1, 0]),
             ]
         )
-        blocks["block1_1"] = block1_1
-        blocks["block1_2"] = block1_2
-
+        blocks = {"block1_1": block1_1, "block1_2": block1_2}
         self.model0 = make_layers(block0, no_relu_layers)
 
         # Stages 2 - 6
@@ -368,7 +362,7 @@ class bodypose_model(nn.Module):
                 ]
             )
 
-        for k in blocks.keys():
+        for k in blocks:
             blocks[k] = make_layers(blocks[k], no_relu_layers)
 
         self.model1_1 = blocks["block1_1"]
@@ -455,10 +449,7 @@ class handpose_model(nn.Module):
             [("conv6_1_CPM", [128, 512, 1, 1, 0]), ("conv6_2_CPM", [512, 22, 1, 1, 0])]
         )
 
-        blocks = {}
-        blocks["block1_0"] = block1_0
-        blocks["block1_1"] = block1_1
-
+        blocks = {"block1_0": block1_0, "block1_1": block1_1}
         # stage 2-6
         for i in range(2, 7):
             blocks[f"block{i}"] = OrderedDict(
@@ -473,7 +464,7 @@ class handpose_model(nn.Module):
                 ]
             )
 
-        for k in blocks.keys():
+        for k in blocks:
             blocks[k] = make_layers(blocks[k], no_relu_layers)
 
         self.model1_0 = blocks["block1_0"]
@@ -496,8 +487,7 @@ class handpose_model(nn.Module):
         concat_stage5 = torch.cat([out_stage4, out1_0], 1)
         out_stage5 = self.model5(concat_stage5)
         concat_stage6 = torch.cat([out_stage5, out1_0], 1)
-        out_stage6 = self.model6(concat_stage6)
-        return out_stage6
+        return self.model6(concat_stage6)
 
 
 @lru_cache(maxsize=1)

@@ -135,12 +135,13 @@ def load_state_dict(weights_location):
             sys.exit(1)
         raise e
     except RuntimeError as e:
-        if "PytorchStreamReader failed reading zip archive" in str(e):
-            if weights_location.startswith("http"):
-                logger.warning("Corrupt checkpoint. deleting and re-downloading...")
-                os.remove(ckpt_path)
-                ckpt_path = get_cached_url_path(weights_location, category="weights")
-                state_dict = load_tensors(ckpt_path, map_location="cpu")
+        if "PytorchStreamReader failed reading zip archive" in str(
+            e
+        ) and weights_location.startswith("http"):
+            logger.warning("Corrupt checkpoint. deleting and re-downloading...")
+            os.remove(ckpt_path)
+            ckpt_path = get_cached_url_path(weights_location, category="weights")
+            state_dict = load_tensors(ckpt_path, map_location="cpu")
         if state_dict is None:
             raise e
 
@@ -324,8 +325,9 @@ def resolve_model_paths(
 
 
 def get_model_default_image_size(weights_location):
-    model_config = iconfig.MODEL_CONFIG_SHORTCUTS.get(weights_location, None)
-    if model_config:
+    if model_config := iconfig.MODEL_CONFIG_SHORTCUTS.get(
+        weights_location, None
+    ):
         return model_config.default_image_size
     return 512
 
@@ -337,8 +339,7 @@ def get_current_diffusion_model():
 def get_cache_dir():
     xdg_cache_home = os.getenv("XDG_CACHE_HOME", None)
     if xdg_cache_home is None:
-        user_home = os.getenv("HOME", None)
-        if user_home:
+        if user_home := os.getenv("HOME", None):
             xdg_cache_home = os.path.join(user_home, ".cache")
 
     if xdg_cache_home is not None:
@@ -448,7 +449,7 @@ def extract_huggingface_repo_commit_file_from_url(url):
     parsed_url = urllib.parse.urlparse(url)
     path_components = parsed_url.path.strip("/").split("/")
 
-    repo = "/".join(path_components[0:2])
+    repo = "/".join(path_components[:2])
     assert path_components[2] == "resolve"
     commit_hash = path_components[3]
     filepath = "/".join(path_components[4:])

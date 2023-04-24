@@ -122,10 +122,6 @@ class DataModuleFromConfig(pl.LightningDataModule):
 
     def _train_dataloader(self):
         is_iterable_dataset = isinstance(self.datasets["train"], SingleConceptDataset)
-        if is_iterable_dataset or self.use_worker_init_fn:
-            pass
-        else:
-            pass
         return DataLoader(
             self.datasets["train"],
             batch_size=self.batch_size,
@@ -214,16 +210,14 @@ class SetupCallback(Callback):
             os.makedirs(self.ckptdir, exist_ok=True)
             os.makedirs(self.cfgdir, exist_ok=True)
 
-        else:
-            # ModelCheckpoint callback created log directory --- remove it
-            if not self.resume and os.path.exists(self.logdir):
-                dst, name = os.path.split(self.logdir)
-                dst = os.path.join(dst, "child_runs", name)
-                os.makedirs(os.path.split(dst)[0], exist_ok=True)
-                try:
-                    os.rename(self.logdir, dst)
-                except FileNotFoundError:
-                    pass
+        elif not self.resume and os.path.exists(self.logdir):
+            dst, name = os.path.split(self.logdir)
+            dst = os.path.join(dst, "child_runs", name)
+            os.makedirs(os.path.split(dst)[0], exist_ok=True)
+            try:
+                os.rename(self.logdir, dst)
+            except FileNotFoundError:
+                pass
 
 
 class ImageLogger(Callback):
@@ -327,11 +321,10 @@ class ImageLogger(Callback):
                 pl_module.train()
 
     def check_frequency(self, check_idx):
-        if (check_idx % self.batch_freq) == 0 and (
-            check_idx > 0 or self.log_first_step
-        ):
-            return True
-        return False
+        return bool(
+            (check_idx % self.batch_freq) == 0
+            and (check_idx > 0 or self.log_first_step)
+        )
 
     def on_train_batch_end(self, trainer, pl_module, outputs, batch, batch_idx):
         if not self.disabled and (pl_module.global_step > 0 or self.log_first_step):
@@ -342,11 +335,12 @@ class ImageLogger(Callback):
     ):
         if not self.disabled and pl_module.global_step > 0:
             self.log_img(pl_module, batch, batch_idx, split="val")
-        if hasattr(pl_module, "calibrate_grad_norm"):
-            if (
-                pl_module.calibrate_grad_norm and batch_idx % 25 == 0
-            ) and batch_idx > 0:
-                self.log_gradients(trainer, pl_module, batch_idx=batch_idx)
+        if (
+            hasattr(pl_module, "calibrate_grad_norm")
+            and (pl_module.calibrate_grad_norm and batch_idx % 25 == 0)
+            and batch_idx > 0
+        ):
+            self.log_gradients(trainer, pl_module, batch_idx=batch_idx)
 
 
 class CUDACallback(Callback):
@@ -469,7 +463,7 @@ def train_diffusion_model(
     }
 
     modelckpt_cfg = OmegaConf.create(default_modelckpt_cfg)
-    default_callbacks_cfg.update({"checkpoint_callback": modelckpt_cfg})
+    default_callbacks_cfg["checkpoint_callback"] = modelckpt_cfg
 
     callbacks_cfg = OmegaConf.create(default_callbacks_cfg)
 
@@ -524,10 +518,9 @@ def train_diffusion_model(
 
     signal.signal(signal.SIGUSR1, melk)
     try:
-        try:
-            trainer.fit(model, data)
-        except Exception:
-            melk()
-            raise
+        trainer.fit(model, data)
+    except Exception:
+        melk()
+        raise
     finally:
         mod_logger.info(trainer.profiler.summary())

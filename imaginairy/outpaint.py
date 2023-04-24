@@ -218,12 +218,15 @@ def outpaint_arg_str_parse(arg_str):
             raise ValueError(f"Invalid outpaint argument '{arg}'")
         direction, amount = match.groups()
         direction = direction.lower()
-        if len(direction) == 1:
-            if direction not in valid_direction_chars:
-                raise ValueError(f"Invalid outpaint direction '{direction}'")
-            direction = valid_direction_chars[direction]
-        elif direction not in valid_directions:
+        if (
+            len(direction) == 1
+            and direction not in valid_direction_chars
+            or len(direction) != 1
+            and direction not in valid_directions
+        ):
             raise ValueError(f"Invalid outpaint direction '{direction}'")
+        elif len(direction) == 1:
+            direction = valid_direction_chars[direction]
         kwargs[direction] = int(amount)
 
     if "all" in kwargs:

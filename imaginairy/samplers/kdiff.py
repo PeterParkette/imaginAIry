@@ -106,10 +106,7 @@ class KDiffusionSampler(ImageSampler, ABC):
 
         # if our number of steps is zero, just return the initial latent
         if sigmas.nelement() == 0:
-            if orig_latent is not None:
-                return orig_latent
-            return noise
-
+            return orig_latent if orig_latent is not None else noise
         # t_start is none if init image strength set to 0
         if orig_latent is not None and t_start is not None:
             noisy_latent = noise * sigmas[0] + orig_latent

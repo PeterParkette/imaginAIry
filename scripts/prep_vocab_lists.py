@@ -53,11 +53,11 @@ def make_txts():
     dst_folder = f"{CURDIR}/../imaginairy/vendored/noodle_soup_prompts"
     with open(src_json, encoding="utf-8") as f:
         prompts = json.load(f)
-    categories = []
-    for c in prompts.keys():
-        if any(c.startswith(p) for p in excluded_prefixes):
-            continue
-        categories.append(c)
+    categories = [
+        c
+        for c in prompts.keys()
+        if not any(c.startswith(p) for p in excluded_prefixes)
+    ]
     categories.sort()
     for c in categories:
         print((c, len(prompts[c])))

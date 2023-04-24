@@ -89,20 +89,22 @@ def get_tile_coords(d, tile_dim, overlap=0):
 def get_tiles(img, tile_coords, tile_size):
     tile_list = []
     for y in tile_coords[0]:
-        for x in tile_coords[1]:
-            tile = img[:, :, y : y + tile_size[0], x : x + tile_size[1]]
-            tile_list.append(tile)
+        tile_list.extend(
+            img[:, :, y : y + tile_size[0], x : x + tile_size[1]]
+            for x in tile_coords[1]
+        )
     return tile_list
 
 
 def final_overlap(tile_coords, tile_size):
     last_row, last_col = len(tile_coords[0]) - 1, len(tile_coords[1]) - 1
 
-    f_ovlp = [
-        (tile_coords[0][last_row - 1] + tile_size[0]) - (tile_coords[0][last_row]),
-        (tile_coords[1][last_col - 1] + tile_size[1]) - (tile_coords[1][last_col]),
+    return [
+        (tile_coords[0][last_row - 1] + tile_size[0])
+        - (tile_coords[0][last_row]),
+        (tile_coords[1][last_col - 1] + tile_size[1])
+        - (tile_coords[1][last_col]),
     ]
-    return f_ovlp
 
 
 def add_tiles(tiles, base_img, tile_coords, tile_size, overlap):
