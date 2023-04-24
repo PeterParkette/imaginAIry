@@ -82,11 +82,7 @@ def _imagine_cmd(
 
     configure_logging(log_level)
 
-    if isinstance(init_image, str):
-        init_images = [init_image]
-    else:
-        init_images = init_image
-
+    init_images = [init_image] if isinstance(init_image, str) else init_image
     from imaginairy.utils import glob_expand_paths
 
     num_prexpaned_init_images = len(init_images)
@@ -179,8 +175,7 @@ def _imagine_cmd(
 
                 if arg_schedules:
                     schedules = parse_schedule_strs(arg_schedules)
-                    for new_prompt in prompt_mutator(prompt, schedules):
-                        prompts.append(new_prompt)
+                    prompts.extend(iter(prompt_mutator(prompt, schedules)))
                 else:
                     prompts.append(prompt)
 

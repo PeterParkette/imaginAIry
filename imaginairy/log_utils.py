@@ -127,14 +127,13 @@ class ImageLoggingContext:
                 self.progress_latent_callback(latents)
             if (
                 self.step_count - self.last_progress_img_step
-            ) > self.progress_img_interval_steps:
-                if (
-                    time.perf_counter() - self.last_progress_img_ts
-                    > self.progress_img_interval_min_s
-                ):
-                    self.log_progress_latent(latents)
-                    self.last_progress_img_step = self.step_count
-                    self.last_progress_img_ts = time.perf_counter()
+            ) > self.progress_img_interval_steps and (
+                time.perf_counter() - self.last_progress_img_ts
+                > self.progress_img_interval_min_s
+            ):
+                self.log_progress_latent(latents)
+                self.last_progress_img_step = self.step_count
+                self.last_progress_img_ts = time.perf_counter()
 
         if not self.debug_img_callback:
             return

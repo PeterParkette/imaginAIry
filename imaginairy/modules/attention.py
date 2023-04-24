@@ -42,9 +42,9 @@ class FeedForward(nn.Module):
         inner_dim = int(dim * mult)
         dim_out = dim_out if dim_out is not None else dim
         project_in = (
-            nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU())
-            if not glu
-            else GEGLU(dim, inner_dim)
+            GEGLU(dim, inner_dim)
+            if glu
+            else nn.Sequential(nn.Linear(dim, inner_dim), nn.GELU())
         )
 
         self.net = nn.Sequential(
@@ -183,9 +183,12 @@ class CrossAttention(nn.Module):
         # if mask is None and _global_mask_hack is not None:
         #     mask = _global_mask_hack.to(torch.bool)
 
-        if get_device() == "cuda" or "mps" in get_device():
-            if not XFORMERS_IS_AVAILABLE and ALLOW_SPLITMEM:
-                return self.forward_splitmem(x, context=context, mask=mask)
+        if (
+            (get_device() == "cuda" or "mps" in get_device())
+            and not XFORMERS_IS_AVAILABLE
+            and ALLOW_SPLITMEM
+        ):
+            return self.forward_splitmem(x, context=context, mask=mask)
 
         h = self.heads
         # print(x.shape)
@@ -240,7 +243,6 @@ class CrossAttention(nn.Module):
 
         mem_free_total = get_mem_free_total(q.device)
 
-        gb = 1024**3
         tensor_size = q.shape[0] * q.shape[1] * k.shape[1] * q.element_size()
         modifier = 3 if q.element_size() == 2 else 2.5
         mem_required = tensor_size * modifier
@@ -262,6 +264,7 @@ class CrossAttention(nn.Module):
                 max_res = (
                     math.floor(math.sqrt(math.sqrt(mem_free_total / 2.5)) / 8) * 64
                 )
+                gb = 1024**3
                 raise RuntimeError(
                     f"Not enough memory, use lower resolution (max approx. {max_res}x{max_res}). "
                     f"Need: {mem_required / 64 / gb:0.1f}GB free, Have:{mem_free_total / gb:0.1f}GB free"
@@ -441,13 +444,13 @@ class SpatialTransformer(nn.Module):
         self.in_channels = in_channels
         inner_dim = n_heads * d_head
         self.norm = Normalize(in_channels)
-        if not use_linear:
-            self.proj_in = nn.Conv2d(
+        self.proj_in = (
+            nn.Linear(in_channels, inner_dim)
+            if use_linear
+            else nn.Conv2d(
                 in_channels, inner_dim, kernel_size=1, stride=1, padding=0
             )
-        else:
-            self.proj_in = nn.Linear(in_channels, inner_dim)
-
+        )
         self.transformer_blocks = nn.ModuleList(
             [
                 BasicTransformerBlock(
@@ -462,12 +465,15 @@ class SpatialTransformer(nn.Module):
                 for d in range(depth)
             ]
         )
-        if not use_linear:
-            self.proj_out = zero_module(
-                nn.Conv2d(inner_dim, in_channels, kernel_size=1, stride=1, padding=0)
+        self.proj_out = (
+            zero_module(nn.Linear(in_channels, inner_dim))
+            if use_linear
+            else zero_module(
+                nn.Conv2d(
+                    inner_dim, in_channels, kernel_size=1, stride=1, padding=0
+                )
             )
-        else:
-            self.proj_out = zero_module(nn.Linear(in_channels, inner_dim))
+        )
         self.use_linear = use_linear
 
     def forward(self, x, context=None):

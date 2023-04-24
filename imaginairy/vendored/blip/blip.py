@@ -55,10 +55,7 @@ class BLIP_Base(nn.Module):
         text = self.tokenizer(caption, return_tensors="pt").to(image.device)
 
         if mode == "image":
-            # return image features
-            image_embeds = self.visual_encoder(image)
-            return image_embeds
-
+            return self.visual_encoder(image)
         elif mode == "text":
             # return text features
             text_output = self.text_encoder(
@@ -145,9 +142,7 @@ class BLIP_Decoder(nn.Module):
             labels=decoder_targets,
             return_dict=True,
         )
-        loss_lm = decoder_output.loss
-
-        return loss_lm
+        return decoder_output.loss
 
     def generate(
         self,
@@ -294,9 +289,11 @@ def load_checkpoint(model, url_or_filename):
             state_dict["visual_encoder_m.pos_embed"], model.visual_encoder_m
         )
     for key in model.state_dict().keys():
-        if key in state_dict.keys():
-            if state_dict[key].shape != model.state_dict()[key].shape:
-                del state_dict[key]
+        if (
+            key in state_dict.keys()
+            and state_dict[key].shape != model.state_dict()[key].shape
+        ):
+            del state_dict[key]
 
     msg = model.load_state_dict(state_dict, strict=False)
     # print("load checkpoint from %s" % url_or_filename)

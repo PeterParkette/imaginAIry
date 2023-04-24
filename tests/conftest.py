@@ -78,14 +78,12 @@ def reset_get_device():
 
 @pytest.fixture()
 def filename_base_for_outputs(request):
-    filename_base = f"{TESTS_FOLDER}/test_output/{request.node.name}_"
-    return filename_base
+    return f"{TESTS_FOLDER}/test_output/{request.node.name}_"
 
 
 @pytest.fixture()
 def filename_base_for_orig_outputs(request):
-    filename_base = f"{TESTS_FOLDER}/test_output/{request.node.originalname}_"
-    return filename_base
+    return f"{TESTS_FOLDER}/test_output/{request.node.originalname}_"
 
 
 @pytest.fixture(params=SAMPLERS_FOR_TESTING)
@@ -114,8 +112,7 @@ def pytest_collection_modifyitems(config, items):
     filtered_node_ids = set()
     node_ids = [f.nodeid for f in items]
     node_ids.sort()
-    subset = config.getoption("--subset")
-    if subset:
+    if subset := config.getoption("--subset"):
         partition_no, total_partitions = subset.split("/")
         partition_no, total_partitions = int(partition_no), int(total_partitions)
         if partition_no < 1 or partition_no > total_partitions:
@@ -129,7 +126,6 @@ def pytest_collection_modifyitems(config, items):
         print(
             f"Running subset {partition_no}/{total_partitions} {len(filtered_node_ids)} tests:"
         )
-        filtered_node_ids = list(filtered_node_ids)
-        filtered_node_ids.sort()
+        filtered_node_ids = sorted(filtered_node_ids)
         for n in filtered_node_ids:
             print(f"   {n}")

@@ -19,22 +19,15 @@ def detect_faces(img):
         only_center_face=False, resize=640, eye_dist_threshold=5
     )
     face_helper.align_warp_face()
-    faceboxes = []
-
-    for x1, y1, x2, y2, scaling in face_helper.det_faces:
-        # x1, y1, x2, y2 = x1 * scaling, y1 * scaling, x2 * scaling, y2 * scaling
-        faceboxes.append((x1, y1, x2, y2))
-
-    return faceboxes
+    return [(x1, y1, x2, y2) for x1, y1, x2, y2, scaling in face_helper.det_faces]
 
 
 def generate_face_crops(face_roi, max_width, max_height):
     """Returns bounding boxes at various zoom levels for faces in the image."""
 
-    crops = []
     squared_roi = square_roi_coordinate(face_roi, max_width, max_height)
 
-    crops.append(resize_roi_coordinates(squared_roi, 1.1, max_width, max_height))
+    crops = [resize_roi_coordinates(squared_roi, 1.1, max_width, max_height)]
     # 1.6 generally enough to capture entire face
     base_expanded_roi = resize_roi_coordinates(squared_roi, 1.6, max_width, max_height)
 

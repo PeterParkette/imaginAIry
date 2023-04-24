@@ -54,7 +54,7 @@ def get_img_mask(
     if threshold is not None:
         mask[mask < 0.5] = 0
         mask[mask >= 0.5] = 1
-    log_img(mask, f"mask threshold {0.5}")
+    log_img(mask, 'mask threshold 0.5')
 
     mask_np = mask.to(torch.float32).cpu().numpy()
     smoother_strength = 2

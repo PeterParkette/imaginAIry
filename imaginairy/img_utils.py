@@ -66,8 +66,7 @@ def pillow_mask_to_latent_mask(mask_img: PIL.Image.Image, downsampling_factor):
 
     mask = np.array(mask_img).astype(np.float32) / 255.0
     mask = mask[None, None]
-    mask = torch.from_numpy(mask)
-    return mask
+    return torch.from_numpy(mask)
 
 
 def pillow_img_to_opencv_img(img: PIL.Image.Image):

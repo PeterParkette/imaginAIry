@@ -62,17 +62,17 @@ def get_noise_prediction(
     time_encoding_in = torch.cat([time_encoding] * 2)
     if isinstance(positive_conditioning, dict):
         assert isinstance(neutral_conditioning, dict)
-        conditioning_in = {}
-        for k in positive_conditioning:
-            if isinstance(positive_conditioning[k], list):
-                conditioning_in[k] = [
-                    torch.cat([neutral_conditioning[k][i], positive_conditioning[k][i]])
-                    for i in range(len(positive_conditioning[k]))
-                ]
-            else:
-                conditioning_in[k] = torch.cat(
-                    [neutral_conditioning[k], positive_conditioning[k]]
+        conditioning_in = {
+            k: [
+                torch.cat(
+                    [neutral_conditioning[k][i], positive_conditioning[k][i]]
                 )
+                for i in range(len(positive_conditioning[k]))
+            ]
+            if isinstance(positive_conditioning[k], list)
+            else torch.cat([neutral_conditioning[k], positive_conditioning[k]])
+            for k in positive_conditioning
+        }
     else:
         conditioning_in = torch.cat([neutral_conditioning, positive_conditioning])
 
@@ -85,9 +85,7 @@ def get_noise_prediction(
     amplified_noise_pred = signal_amplification * (
         noise_pred_positive - noise_pred_neutral
     )
-    noise_pred = noise_pred_neutral + amplified_noise_pred
-
-    return noise_pred
+    return noise_pred_neutral + amplified_noise_pred
 
 
 def mask_blend(noisy_latent, orig_latent, mask, mask_noise, ts, model):
@@ -100,11 +98,11 @@ def mask_blend(noisy_latent, orig_latent, mask, mask_noise, ts, model):
     log_latent(orig_latent, "orig_latent")
     noised_orig_latent = model.q_sample(orig_latent, ts, mask_noise)
 
-    # this helps prevent the weird disjointed images that can happen with masking
-    hint_strength = 1
     # if we're in the first 10% of the steps then don't fully noise the parts
     # of the image we're not changing so that the algorithm can learn from the context
     if ts > 1000:
+        # this helps prevent the weird disjointed images that can happen with masking
+        hint_strength = 1
         hinted_orig_latent = (
             noised_orig_latent * (1 - hint_strength) + orig_latent * hint_strength
         )

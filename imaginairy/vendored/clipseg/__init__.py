@@ -129,10 +129,7 @@ def forward_multihead_attention(x, b, with_aff=False, attn_mask=None):
     x = x + attn_output
     x = x + b.mlp(b.ln_2(x))
 
-    if with_aff:
-        return x, attn_output_weights
-    else:
-        return x
+    return (x, attn_output_weights) if with_aff else x
 
 
 class CLIPDenseBase(nn.Module):
@@ -250,7 +247,7 @@ class CLIPDenseBase(nn.Module):
             for i, res_block in enumerate(self.model.transformer.resblocks):
                 if mask is not None:
                     mask_layer, mask_type, mask_tensor = mask
-                    if mask_layer == i or mask_layer == "all":
+                    if mask_layer in [i, "all"]:
                         # import ipdb; ipdb.set_trace()
                         size = int(math.sqrt(x.shape[0] - 1))
 
@@ -258,7 +255,7 @@ class CLIPDenseBase(nn.Module):
                             mask_type,
                             nnf.interpolate(
                                 mask_tensor.unsqueeze(1).float(), (size, size)
-                            ).view(mask_tensor.shape[0], size * size),
+                            ).view(mask_tensor.shape[0], size**2),
                         )
 
                     else:
@@ -338,17 +335,13 @@ class CLIPDenseBase(nn.Module):
         if type(conditional) in {list, tuple}:
             text_tokens = clip.tokenize(conditional).to(dev)
             cond = self.clip_model.encode_text(text_tokens)
+        elif conditional in self.precomputed_prompts:
+            cond = self.precomputed_prompts[conditional].float().to(dev)
         else:
-            if conditional in self.precomputed_prompts:
-                cond = self.precomputed_prompts[conditional].float().to(dev)
-            else:
-                text_tokens = clip.tokenize([conditional]).to(dev)
-                cond = self.clip_model.encode_text(text_tokens)[0]
+            text_tokens = clip.tokenize([conditional]).to(dev)
+            cond = self.clip_model.encode_text(text_tokens)[0]
 
-        if self.shift_vector is not None:
-            return cond + self.shift_vector
-        else:
-            return cond
+        return cond + self.shift_vector if self.shift_vector is not None else cond
 
 
 def clip_load_untrained(version):
@@ -529,17 +522,13 @@ class CLIPDensePredT(CLIPDenseBase):
         activation1 = activations[0]
         activations = activations[1:]
 
-        _activations = activations[::-1] if not self.rev_activations else activations
+        _activations = activations if self.rev_activations else activations[::-1]
 
         a = None
         for i, (activation, block, reduce) in enumerate(
             zip(_activations, self.blocks, self.reduces)
         ):
-            if a is not None:
-                a = reduce(activation) + a
-            else:
-                a = reduce(activation)
-
+            a = reduce(activation) + a if a is not None else reduce(activation)
             if i == self.cond_layer:
                 if self.reduce_cond is not None:
                     cond = self.reduce_cond(cond)
@@ -688,10 +677,7 @@ class CLIPDenseBaseline(CLIPDenseBase):
         a = a.view(bs, a.shape[1], size, size)
         a = self.trans_conv(a)
 
-        if return_features:
-            return a, visual_q, cond, activations
-        else:
-            return (a,)
+        return (a, visual_q, cond, activations) if return_features else (a, )
 
 
 class CLIPSegMultiLabel(nn.Module):

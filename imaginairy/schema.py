@@ -168,17 +168,20 @@ class ImaginePrompt:
             self.tile_mode = self.tile_mode.lower()
             assert self.tile_mode in ("", "x", "y", "xy")
 
-        if isinstance(self.control_image, str):
-            if not self.control_image.startswith("*prev."):
-                self.control_image = LazyLoadingImage(filepath=self.control_image)
+        if isinstance(
+            self.control_image, str
+        ) and not self.control_image.startswith("*prev."):
+            self.control_image = LazyLoadingImage(filepath=self.control_image)
 
-        if isinstance(self.init_image, str):
-            if not self.init_image.startswith("*prev."):
-                self.init_image = LazyLoadingImage(filepath=self.init_image)
+        if isinstance(self.init_image, str) and not self.init_image.startswith(
+            "*prev."
+        ):
+            self.init_image = LazyLoadingImage(filepath=self.init_image)
 
-        if isinstance(self.mask_image, str):
-            if not self.mask_image.startswith("*prev."):
-                self.mask_image = LazyLoadingImage(filepath=self.mask_image)
+        if isinstance(self.mask_image, str) and not self.mask_image.startswith(
+            "*prev."
+        ):
+            self.mask_image = LazyLoadingImage(filepath=self.mask_image)
 
         if self.control_image is not None and self.control_image_raw is not None:
             raise ValueError(
@@ -195,7 +198,11 @@ class ImaginePrompt:
         ):
             self.control_image = self.init_image
 
-        if self.control_mode and not (self.control_image or self.control_image_raw):
+        if (
+            self.control_mode
+            and not self.control_image
+            and not self.control_image_raw
+        ):
             raise ValueError("You must set `control_image` when using `control_mode`")
 
         if self.mask_image is not None and self.mask_prompt is not None:
@@ -231,8 +238,7 @@ class ImaginePrompt:
             self.height = self.height or get_model_default_image_size(self.model)
         self.steps = int(self.steps)
         if self.negative_prompt is None:
-            model_config = config.MODEL_CONFIG_SHORTCUTS.get(self.model, None)
-            if model_config:
+            if model_config := config.MODEL_CONFIG_SHORTCUTS.get(self.model, None):
                 self.negative_prompt = model_config.default_negative_prompt
             else:
                 self.negative_prompt = config.DEFAULT_NEGATIVE_PROMPT
@@ -378,9 +384,11 @@ class ImagineResult:
         }
 
     def timings_str(self):
-        if not self.timings:
-            return ""
-        return " ".join(f"{k}:{v:.2f}s" for k, v in self.timings.items())
+        return (
+            " ".join(f"{k}:{v:.2f}s" for k, v in self.timings.items())
+            if self.timings
+            else ""
+        )
 
     def _exif(self):
         from PIL import Image

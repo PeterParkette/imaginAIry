@@ -21,19 +21,13 @@ def get_debug_info():
     }
     if torch.cuda.is_available():
         device_props = torch.cuda.get_device_properties(0)
-        data.update(
-            {
-                "cuda_version": torch.version.cuda,
-                "graphics_card": device_props.name,
-                "graphics_card_memory": device_props.total_memory,
-                "graphics_card_processor_count": device_props.multi_processor_count,
-                "graphics_card_hw_version": f"{device_props.major}.{device_props.minor}",
-            }
-        )
+        data |= {
+            "cuda_version": torch.version.cuda,
+            "graphics_card": device_props.name,
+            "graphics_card_memory": device_props.total_memory,
+            "graphics_card_processor_count": device_props.multi_processor_count,
+            "graphics_card_hw_version": f"{device_props.major}.{device_props.minor}",
+        }
     elif "mps" in get_device():
-        data.update(
-            {
-                "graphics_card": "Apple MPS",
-            }
-        )
+        data["graphics_card"] = "Apple MPS"
     return data

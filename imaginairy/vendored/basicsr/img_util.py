@@ -84,9 +84,8 @@ def tensor2img(tensor, rgb2bgr=True, out_type=np.uint8, min_max=(0, 1)):
             img_np = img_np.transpose(1, 2, 0)
             if img_np.shape[2] == 1:  # gray image
                 img_np = np.squeeze(img_np, axis=2)
-            else:
-                if rgb2bgr:
-                    img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
+            elif rgb2bgr:
+                img_np = cv2.cvtColor(img_np, cv2.COLOR_RGB2BGR)
         elif n_dim == 2:
             img_np = _tensor.numpy()
         else:
@@ -178,10 +177,9 @@ def crop_border(imgs, crop_border):
     """
     if crop_border == 0:
         return imgs
+    if isinstance(imgs, list):
+        return [
+            v[crop_border:-crop_border, crop_border:-crop_border, ...] for v in imgs
+        ]
     else:
-        if isinstance(imgs, list):
-            return [
-                v[crop_border:-crop_border, crop_border:-crop_border, ...] for v in imgs
-            ]
-        else:
-            return imgs[crop_border:-crop_border, crop_border:-crop_border, ...]
+        return imgs[crop_border:-crop_border, crop_border:-crop_border, ...]

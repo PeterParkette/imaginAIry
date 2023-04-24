@@ -3,18 +3,15 @@ from imaginairy.enhancers.prompt_expansion import category_list, expand_prompts
 
 def test_prompt_expander_basic():
     prompt = "a {red|blue|hot pink} dog"
-    prompts = list(expand_prompts(prompt, n=3))
-    # should output each possibility exactly once
+    prompts = sorted(expand_prompts(prompt, n=3))
     expected = ["a blue dog", "a hot pink dog", "a red dog"]
-    prompts.sort()
     expected.sort()
     assert prompts == expected
 
 
 def test_prompt_expander_from_wordlist():
     prompt = "a {_color_|golden} dog"
-    prompts = list(expand_prompts(prompt, n=18))
-    # should output each possibility exactly once
+    prompts = sorted(expand_prompts(prompt, n=18))
     expected = [
         "a aqua dog",
         "a black dog",
@@ -35,7 +32,6 @@ def test_prompt_expander_from_wordlist():
         "a white dog",
         "a yellow dog",
     ]
-    prompts.sort()
     expected.sort()
     assert prompts == expected
 

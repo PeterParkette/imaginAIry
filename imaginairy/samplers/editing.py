@@ -63,10 +63,8 @@ class CFGEditingDenoiser(nn.Module):
             cfg_z, cfg_sigma, cond=cfg_cond
         ).chunk(3)
 
-        result = (
+        return (
             out_uncond
             + cond_scale * (out_cond - out_img_cond)
             + image_cfg_scale * (out_img_cond - out_uncond)
         )
-
-        return result

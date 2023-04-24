@@ -100,8 +100,6 @@ def test_feather_tile_brute():
             torch_img_to_pillow_img(rebuilt).show()
             torch_img_to_pillow_img((rebuilt - img) * 20).show()
 
-        else:
-            pass
         # print(
         #     f"{status}: img:{img.shape} tile_size={tile_size} overlap_percent={overlap_percent} diff={diff}"
         # )

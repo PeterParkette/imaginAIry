@@ -268,10 +268,7 @@ class Encoder(nn.Module):
         curr_res = self.resolution
         in_ch_mult = (1,) + tuple(ch_mult)
 
-        blocks = []
-        # initial convultion
-        blocks.append(nn.Conv2d(in_channels, nf, kernel_size=3, stride=1, padding=1))
-
+        blocks = [nn.Conv2d(in_channels, nf, kernel_size=3, stride=1, padding=1)]
         # residual and downsampling blocks, with attention on smaller res (16x16)
         for i in range(self.num_resolutions):
             block_in_ch = nf * in_ch_mult[i]
@@ -319,12 +316,11 @@ class Generator(nn.Module):
         block_in_ch = self.nf * self.ch_mult[-1]
         curr_res = self.resolution // 2 ** (self.num_resolutions - 1)
 
-        blocks = []
-        # initial conv
-        blocks.append(
-            nn.Conv2d(self.in_channels, block_in_ch, kernel_size=3, stride=1, padding=1)
-        )
-
+        blocks = [
+            nn.Conv2d(
+                self.in_channels, block_in_ch, kernel_size=3, stride=1, padding=1
+            )
+        ]
         # non-local attention block
         blocks.append(ResBlock(block_in_ch, block_in_ch))
         blocks.append(AttnBlock(block_in_ch))

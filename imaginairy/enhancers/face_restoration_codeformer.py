@@ -44,7 +44,7 @@ def face_restore_helper():
     FaceRestoreHelper loads a model internally so we need to cache it
     or we end up with a memory leak
     """
-    face_helper = FaceRestoreHelper(
+    return FaceRestoreHelper(
         upscale_factor=1,
         face_size=512,
         crop_ratio=(1, 1),
@@ -53,7 +53,6 @@ def face_restore_helper():
         use_parse=True,
         device=face_restore_device,
     )
-    return face_helper
 
 
 def enhance_faces(img, fidelity=0):

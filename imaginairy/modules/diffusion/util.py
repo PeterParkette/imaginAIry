@@ -84,10 +84,7 @@ def make_ddim_timesteps(
             f'There is no ddim discretization method called "{ddim_discr_method}"'
         )
 
-    # assert ddim_timesteps.shape[0] == num_ddim_timesteps
-    # add one to get the final alpha values right (the ones from first scale to data during sampling)
-    steps_out = ddim_timesteps + 1
-    return steps_out
+    return ddim_timesteps + 1
 
 
 def make_ddim_sampling_parameters(alphacums, ddim_timesteps, eta):
